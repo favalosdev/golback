@@ -161,7 +161,7 @@ impl Universe {
     /// 
     /// A cell is born if it has exactly this many alive neighbors.
     /// Default Conway's Game of Life uses B3 (birth with 3 neighbors).
-    /// Returns a cloned vector of birth rules
+    /// Returns a cloned vector of birth rules.
     pub fn b(&self) -> Vec<usize> {
         self.b.clone()
     }
