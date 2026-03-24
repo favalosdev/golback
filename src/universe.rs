@@ -303,7 +303,6 @@ impl Universe {
     /// Toggles the alive/dead state of a cell at the specified coordinate.
     /// 
     /// If the cell was alive, it becomes dead. If it was dead, it becomes alive.
-    /// The universe will automatically expand if the coordinate is outside the current bounds.
     /// 
     /// # Arguments
     /// * `target` - The (x, y) coordinate of the cell to toggle
