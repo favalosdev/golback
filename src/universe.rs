@@ -32,6 +32,11 @@ enum Quadrant {
 }
 
 type Path = Vec<(NodeId, Quadrant)>;
+
+/// World coordinate type representing a cell position in the Game of Life grid.
+/// 
+/// Coordinates are signed integers allowing for negative positions.
+/// The origin (0, 0) is at the center of the universe.
 pub type WCoord = (isize, isize);
 
 const VOID: NodeId = 0;
@@ -67,6 +72,30 @@ impl Caches {
     }
 }
 
+/// A high-performance Game of Life universe using HashLife algorithm with quadtree compression.
+/// 
+/// This implementation uses memoization and recursive quadtree structures to efficiently
+/// simulate Conway's Game of Life, capable of computing billions of generations per second
+/// for many patterns.
+/// 
+/// # Examples
+/// 
+/// ```rust
+/// use golback::Universe;
+/// 
+/// // Create a new universe with default B3/S23 rules
+/// let mut universe = Universe::new();
+/// universe.init();
+/// 
+/// // Load a pattern from RLE file
+/// universe.load("glider.rle".to_string()).unwrap();
+/// 
+/// // Advance 100 generations
+/// universe.advance(100);
+/// 
+/// // Get current population
+/// println!("Population: {}", universe.population());
+/// ```
 pub struct Universe {
     nodes: Vec<Node>,
     root: NodeId,
@@ -77,6 +106,19 @@ pub struct Universe {
 }
 
 impl Universe {
+    /// Creates a new empty universe with default Conway's Game of Life rules (B3/S23).
+    /// 
+    /// The universe starts uninitialized. Call `init()` to create an empty grid,
+    /// or `load()`/`from_coords()` to populate it with a pattern.
+    /// 
+    /// # Examples
+    /// 
+    /// ```rust
+    /// use golback::Universe;
+    /// 
+    /// let mut universe = Universe::new();
+    /// universe.init(); // Creates empty grid
+    /// ```
     pub fn new() -> Self {
         let mut nodes = Vec::with_capacity(ARENA_SIZE);
 
@@ -100,22 +142,57 @@ impl Universe {
         }
     }
 
+    /// Initializes the universe with an empty grid.
+    /// 
+    /// Must be called before using the universe if you don't load a pattern first.
+    /// Creates a minimal empty universe that can be expanded as needed.
     pub fn init(&mut self) {
         self.root = self.zero(cmp::max(DIM, 1_usize));
     }
 
+    /// Returns the total number of generations that have elapsed since universe creation.
+    /// 
+    /// This counter is updated by `advance()` and `hash_life()` operations.
     pub fn epochs(&self) -> usize {
         self.epochs
     }
 
+    /// Returns the birth rule set.
+    /// 
+    /// A cell is born if it has exactly this many alive neighbors.
+    /// Default Conway's Game of Life uses B3 (birth with 3 neighbors).
     pub fn b(&self) -> Vec<usize> {
         self.b.clone()
     }
 
+    /// An alive cell survives if it has exactly this many alive neighbors.
+    /// 
+    /// Default Conway's Game of Life uses S23 (survive with 2 or 3 neighbors
+    /// Returns a cloned vector of survival rules (how many neighbors required for an alive cell to survive).
     pub fn s(&self) -> Vec<usize> {
         self.s.clone()
     }
-
+    /// 
+    /// The RLE format can include custom birth/survival rules in the header.
+    /// If custom rules are found, they will override the default B3/S23 rules.
+    /// The pattern is centered at the origin (0, 0).
+    /// 
+    /// # Arguments
+    /// * `input` - Path to the RLE file
+    /// 
+    /// # Errors
+    /// Returns an error if the file cannot be read or parsed as valid RLE format.
+    /// 
+    /// # Examples
+    /// ```rust
+    /// # use golback::Universe;
+    /// # let mut universe = Universe::new();
+    /// universe.load("patterns/glider.rle".to_string())?;
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    /// 
+    /// # Errors
+    /// Returns an error if the file cannot be opened or parsed as valid RLE format.
     pub fn load(&mut self, input: String) -> Result<(), Box<dyn std::error::Error>> {
         let file = File::open(&input)?;
         let pattern = Rle::new_from_file(file)?;
@@ -144,16 +221,135 @@ impl Universe {
         Ok(())
     }
 
+    /// Creates a universe from a list of alive cell coordinates.
+    /// 
+    /// All coordinates not in the list are considered dead.
+    /// The universe will automatically expand to accommodate all coordinates.
+    /// 
+    /// # Arguments
+    /// * `cells` - List of (x, y) coordinates representing alive cells
+    /// 
+    /// # Examples
+    /// ```rust
+    /// use golback::Universe;
+    /// use std::collections::LinkedList;
+    /// 
+    /// let mut universe = Universe::new();
+    /// let mut cells = LinkedList::new();
+    /// cells.push_back((0, 0));
+    /// cells.push_back((1, 0));
+    /// cells.push_back((0, 1));
+    /// 
+    /// universe.from_coords(cells); // Creates a block pattern
+    /// ```
     pub fn from_coords(&mut self, cells: LinkedList<(isize, isize)>) {
         self.root = self.from_coords_aux(&cells, (0,0), cmp::max(DIM, 1_usize))
     }
 
-    // Every universe is uniquely represented by an ID
+    /// Returns a unique identifier for the current universe state.
+    /// 
+    /// This can be used to detect when the universe reaches a previous state
+    /// (cycle detection) or to compare universe configurations.
     pub fn state(&self) -> NodeId {
         self.root
     }
 
-    // Convert (x,y) to QuadTree
+    /// Returns the current population (number of alive cells).
+    /// 
+    /// This count is efficiently maintained and doesn't require scanning the entire universe.
+    pub fn population(&self) -> usize {
+        self.nodes[self.root].n
+    }
+
+    /// Performs one HashLife iteration, advancing by 2^(k-2) generations.
+    /// 
+    /// This is the core high-performance operation. The number of generations
+    /// advanced depends on the current universe size (larger universes advance more generations).
+    /// Use this for maximum performance when you don't need exact generation control.
+    /// 
+    /// # Examples
+    /// ```rust
+    /// # use golback::Universe;
+    /// # let mut universe = Universe::new();
+    /// # universe.init();
+    /// universe.hash_life(); // Advance many generations at once
+    /// ```
+    pub fn hash_life(&mut self) {
+        let nested = self.centre(self.root);
+        self.root = self.successor(nested, None);
+        self.epochs += 2_usize.pow((self.nodes[self.root].k as u32) - 2);
+    }
+
+    /// Advances the universe by exactly the specified number of generations.
+    /// 
+    /// This method provides precise control over generation advancement.
+    /// For maximum performance with large generation counts, consider using `hash_life()` instead.
+    /// 
+    /// # Arguments
+    /// * `gens` - Number of generations to advance (must be >= 1)
+    /// 
+    /// # Examples
+    /// ```rust
+    /// # use golback::Universe;
+    /// # let mut universe = Universe::new();
+    /// # universe.init();
+    /// universe.advance(100); // Advance exactly 100 generations
+    /// ```
+    pub fn advance(&mut self, gens: usize) {
+        self.root = self.advance_aux(self.root, gens);
+        self.epochs += gens;
+    }
+
+    /// Toggles the alive/dead state of a cell at the specified coordinate.
+    /// 
+    /// If the cell was alive, it becomes dead. If it was dead, it becomes alive.
+    /// The universe will automatically expand if the coordinate is outside the current bounds.
+    /// 
+    /// # Arguments
+    /// * `target` - The (x, y) coordinate of the cell to toggle
+    /// 
+    /// # Examples
+    /// ```rust
+    /// # use golback::Universe;
+    /// # let mut universe = Universe::new();
+    /// # universe.init();
+    /// universe.toggle((0, 0)); // Toggle cell at origin
+    /// ```
+    pub fn toggle(&mut self, target: WCoord) {
+        let path = self.search(target);
+        
+        let (leaf, q) = path[0];
+        let (parent, _) = path[1];
+        let mut updated = self.set_child(parent, q, if leaf == ALIVE { DEAD } else { ALIVE });
+
+        for i in 2..path.len() {
+            let (_, q) = path[i-1];
+            let (curr, _) = path[i];
+            updated = self.set_child(curr, q, updated);
+        }
+
+        self.root = updated;
+    }
+
+    /// Returns a list of coordinates of all currently alive cells.
+    /// 
+    /// This can be used to export the current universe state or for visualization.
+    /// The returned coordinates are in no particular order.
+    /// 
+    /// # Examples
+    /// ```rust
+    /// # use golback::Universe;
+    /// # let mut universe = Universe::new();
+    /// # universe.init();
+    /// let alive_cells = universe.to_coords();
+    /// println!("Found {} alive cells", alive_cells.len());
+    /// ```
+    pub fn to_coords(&self) -> LinkedList<WCoord> {
+        let mut points = list![];
+        self.to_coords_aux(self.root, (0, 0), &mut points);
+        points
+    }
+
     fn from_coords_aux(
         &mut self,
         cells: &LinkedList<WCoord>,
@@ -261,10 +457,6 @@ impl Universe {
         }
     }
 
-    pub fn population(&self) -> usize {
-        self.nodes[self.root].n
-    }
-
     fn life_4x4(&mut self, m: NodeId) -> NodeId {
         let m_node = &self.nodes[m];
         let a = &self.nodes[m_node.a];
@@ -278,17 +470,6 @@ impl Universe {
         let da = self.life(a.d, b.c, b.d, c.b, d.a, d.b, c.d, d.c, d.d);
 
         self.join(ad, bc, cb, da)
-    }
-
-    pub fn hash_life(&mut self) {
-        let nested = self.centre(self.root);
-        self.root = self.successor(nested, None);
-        self.epochs += 2_usize.pow((self.nodes[self.root].k as u32) - 2);
-    }
-
-    pub fn advance(&mut self, gens: usize) {
-        self.root = self.advance_aux(self.root, gens);
-        self.epochs += gens;
     }
 
     fn advance_aux(&mut self, root: NodeId, mut gens: usize) -> NodeId {
@@ -307,9 +488,6 @@ impl Universe {
 
         nested
     }
-
-    // Forward's m 2**j generations forward and returns a 2**(k-1) x 2**(k-1) successor.
-    // The default value of j is k-2.
 
     fn successor(&mut self, m: NodeId, j: Option<usize>) -> NodeId {
         if let Some(id) = self.caches.successor.get(&(m, j)) {
@@ -385,24 +563,6 @@ impl Universe {
         next
     }
 
-    // Toggle the cell in coordinate (x, y)
-    pub fn toggle(&mut self, target: WCoord) {
-        let path = self.search(target);
-        
-        let (leaf, q) = path[0];
-        let (parent, _) = path[1];
-        let mut updated = self.set_child(parent, q, if leaf == ALIVE { DEAD } else { ALIVE });
-
-        for i in 2..path.len() {
-            let (_, q) = path[i-1];
-            let (curr, _) = path[i];
-            updated = self.set_child(curr, q, updated);
-        }
-
-        self.root = updated;
-    }
-
-    // Aux function to toggle
     fn set_child(&mut self, parent: NodeId, q: Quadrant, target: NodeId) -> NodeId {
         let Node { a, b, c, d, .. } = self.nodes[parent];
 
@@ -414,7 +574,6 @@ impl Universe {
         }
     } 
 
-    // Returns the path from the root node to the target
     fn search(&self, target: WCoord) -> Path {
         let mut path = Vec::with_capacity(cmp::max(DIM, 1) + 1);
         self.search_aux(self.root, Quadrant::SW, target, (0, 0), &mut path);
@@ -445,12 +604,6 @@ impl Universe {
         }
 
         path.push((current, quadrant));
-    }
-
-    pub fn to_coords(&self) -> LinkedList<WCoord> {
-        let mut points = list![];
-        self.to_coords_aux(self.root, (0, 0), &mut points);
-        points
     }
 
     fn to_coords_aux(
