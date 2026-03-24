@@ -6,6 +6,7 @@ description = "A high-performance quadtree-based backend for Conway's Game of Li
 license = "MIT"
 homepage = "https://github.com/favalosdev/golback"
 repository = "https://github.com/favalosdev/golback"
+documentation = "https://docs.rs/golback"
 authors = ["Fernando Avalos"]
 
 [dependencies]
