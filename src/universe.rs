@@ -75,13 +75,13 @@ impl Caches {
 /// A high-performance Game of Life universe using HashLife algorithm with quadtree compression.
 /// 
 /// This implementation uses memoization and recursive quadtree structures to efficiently
-/// simulate Conway's Game of Life, capable of computing billions of generations per second
+/// simulate Conway's Game of Life, capable of computing multiple generations per second
 /// for many patterns.
 /// 
 /// # Examples
 /// 
 /// ```rust
-/// use golback::Universe;
+/// use golback::universe::Universe;
 /// 
 /// // Create a new universe with default B3/S23 rules
 /// let mut universe = Universe::new();
@@ -114,7 +114,7 @@ impl Universe {
     /// # Examples
     /// 
     /// ```rust
-    /// use golback::Universe;
+    /// use golback::universe::Universe;
     /// 
     /// let mut universe = Universe::new();
     /// universe.init(); // Creates empty grid
@@ -186,7 +186,7 @@ impl Universe {
     /// 
     /// # Examples
     /// ```rust
-    /// # use golback::Universe;
+    /// # use golback::universe::Universe;
     /// # let mut universe = Universe::new();
     /// universe.load("patterns/glider.rle".to_string())?;
     /// # Ok::<(), Box<dyn std::error::Error>>(())
@@ -232,11 +232,12 @@ impl Universe {
     /// 
     /// # Examples
     /// ```rust
-    /// use golback::Universe;
+    /// use golback::universe::Universe;
     /// use std::collections::LinkedList;
     /// 
     /// let mut universe = Universe::new();
     /// let mut cells = LinkedList::new();
+    /// 
     /// cells.push_back((0, 0));
     /// cells.push_back((1, 0));
     /// cells.push_back((0, 1));
@@ -270,9 +271,9 @@ impl Universe {
     /// 
     /// # Examples
     /// ```rust
-    /// # use golback::Universe;
+    /// # use golback::universe::Universe;
     /// # let mut universe = Universe::new();
-    /// # universe.init();
+    /// # universe.load("patterns/gosperglidergun.rle".to_string())?;
     /// universe.hash_life(); // Advance many generations at once
     /// ```
     pub fn hash_life(&mut self) {
@@ -291,9 +292,9 @@ impl Universe {
     /// 
     /// # Examples
     /// ```rust
-    /// # use golback::Universe;
+    /// # use golback::universe::Universe;
     /// # let mut universe = Universe::new();
-    /// # universe.init();
+    /// # universe.load("patterns/gosperglidergun.rle".to_string())?;
     /// universe.advance(100); // Advance exactly 100 generations
     /// ```
     pub fn advance(&mut self, gens: usize) {
@@ -310,7 +311,7 @@ impl Universe {
     /// 
     /// # Examples
     /// ```rust
-    /// # use golback::Universe;
+    /// # use golback::universe::Universe;
     /// # let mut universe = Universe::new();
     /// # universe.init();
     /// universe.toggle((0, 0)); // Toggle cell at origin
@@ -338,9 +339,9 @@ impl Universe {
     /// 
     /// # Examples
     /// ```rust
-    /// # use golback::Universe;
+    /// # use golback::universe::Universe;
     /// # let mut universe = Universe::new();
-    /// # universe.init();
+    /// # universe.load("patterns/gosperglidergun.rle".to_string())?;
     /// let alive_cells = universe.to_coords();
     /// println!("Found {} alive cells", alive_cells.len());
     /// ```
@@ -349,6 +350,8 @@ impl Universe {
         self.to_coords_aux(self.root, (0, 0), &mut points);
         points
     }
+
+    // Private methods
 
     fn from_coords_aux(
         &mut self,
