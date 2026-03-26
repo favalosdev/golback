@@ -11,8 +11,6 @@ use ca_formats::rle::Rle;
 const DIM: usize = 15;
 const ARENA_SIZE: usize = 500_000;
 
-type NodeId = usize;
-
 #[derive(Debug)]
 struct Node {
     n: usize, // Number of alive cells within the node
@@ -22,6 +20,8 @@ struct Node {
     c: NodeId,
     d: NodeId
 }
+
+pub type NodeId = usize;
 
 #[derive(Debug, Clone, Copy)]
 enum Quadrant {
@@ -477,16 +477,16 @@ impl Universe {
 
     fn advance_aux(&mut self, root: NodeId, mut gens: usize) -> NodeId {
         let mut nested = root;
-        let mut index = 0;
+        let mut counter= 0;
 
         while gens > 0 {
             if (gens & 1) == 1 {
                 nested = self.centre(nested);
-                nested = self.successor(nested, Some(index));
+                nested = self.successor(nested, Some(counter));
             }
 
             gens = gens >> 1;
-            index += 1;
+            counter += 1;
         }
 
         nested
