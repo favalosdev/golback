@@ -1,18 +1,15 @@
 use std::collections::{LinkedList, HashSet};
 use std::cmp;
 use std::fs::File;
-
 use rustc_hash::FxHashMap;
-
 use literal::list;
-
 use ca_formats::rle::Rle;
 
 const ARENA_SIZE: usize = 500_000;
 
 #[derive(Debug)]
 struct Node {
-    n: u64, // Number of alive cells within the node
+    n: usize, // Number of alive cells within the node
     k: u32, // Size of the quadtree (2**k x 2**k)
     a: NodeId,
     b: NodeId,
@@ -42,12 +39,16 @@ type Path = Vec<(NodeId, Quadrant)>;
 /// The origin (0, 0) is at the center of the universe.
 pub type WCoord = (i64, i64);
 
-const VOID: NodeId = 0;
-const DEAD: NodeId = 1;
-const ALIVE: NodeId = 2;
+const DEAD: NodeId = 0;
+const ALIVE: NodeId = 1;
+const VOID: NodeId = 2;
 
 fn offset(k: u32) -> i64 {
-    2_i64.pow(k - 2)
+    if k > 1 {
+        2_i64.pow(k - 2)
+    } else {
+        1
+    }
 }
 
 fn transform(x: i64) -> i64 {
@@ -61,7 +62,7 @@ fn in_limit(target: WCoord, k: u32) -> bool {
 
 impl Node {
     fn new(
-        n: u64,
+        n: usize,
         k: u32,
         a: NodeId,
         b: NodeId,
@@ -118,7 +119,7 @@ pub struct Universe {
     caches: Caches,
     b: Vec<u8>,
     s: Vec<u8>,
-    epochs: u32
+    epochs: u64 
 }
 
 impl Universe {
@@ -138,38 +139,41 @@ impl Universe {
     pub fn new() -> Self {
         let mut nodes = Vec::with_capacity(ARENA_SIZE);
 
-        let void = Node::new(0, 0, VOID, VOID, VOID, VOID);
         let dead = Node::new(0, 0, VOID, VOID, VOID, VOID);
         let alive = Node::new(1, 0, VOID, VOID, VOID, VOID);
+        let void = Node::new(0, 0, VOID, VOID, VOID, VOID);
         let dummy = Node::new(0, 1, DEAD, DEAD, DEAD, DEAD);
         
-        nodes.push(void);
         nodes.push(dead);
         nodes.push(alive);
+        nodes.push(void);
         nodes.push(dummy);
 
         let root = nodes.len() - 1;
-        let caches = Caches::new();
 
         Self {
             nodes,
             root,
-            caches,
+            caches: Caches::new(),
             b: vec![3],
             s: vec![2, 3],
             epochs: 0
         }
     }
 
+    /// Initializes the universe with an empty grid.
+    /// 
+    /// Must be called before using the universe if you don't load a pattern first.
+    /// Creates a minimal empty universe that can be expanded as needed.
+    pub fn init(&mut self, dim: u32) {
+        self.root = self.zero(dim.max(self.nodes[self.root].k));
+    }
+
     /// Returns the total number of generations that have elapsed since universe creation.
     /// 
     /// This counter is updated by `advance()` and `hash_life()` operations.
-    pub fn epochs(&self) -> u32 {
+    pub fn epochs(&self) -> u64 {
         self.epochs
-    }
-
-    pub fn dim(&self) -> u32 {
-        self.nodes[self.root].k
     }
 
     /// Returns the birth rule set.
@@ -260,9 +264,7 @@ impl Universe {
     /// universe.from_coords(cells); // Creates a block pattern
     /// ```
     pub fn from_coords(&mut self, cells: LinkedList<WCoord>) {
-        let dim = self.dim();
-        let offset = offset(dim); 
-        self.root = self.from_coords_aux(&cells, (0,0), dim, offset)
+        self.root = self.from_coords_aux(&cells, (0,0), self.dim(), offset(self.dim()))
     }
 
     /// Returns a unique identifier for the current universe state.
@@ -276,7 +278,7 @@ impl Universe {
     /// Returns the current population (number of alive cells).
     /// 
     /// This count is efficiently maintained and doesn't require scanning the entire universe.
-    pub fn population(&self) -> u64 {
+    pub fn population(&self) -> usize {
         self.nodes[self.root].n
     }
 
@@ -296,7 +298,7 @@ impl Universe {
     pub fn hash_life(&mut self) {
         let nested = self.centre(self.root);
         self.root = self.successor(nested, None);
-        self.epochs += offset(self.dim()) as u32;
+        self.epochs += 2_u64.pow(self.dim());
     }
 
     /// Advances the universe by exactly the specified number of generations.
@@ -314,28 +316,9 @@ impl Universe {
     /// # universe.load("patterns/gosperglidergun.rle".to_string())?;
     /// universe.advance(100); // Advance exactly 100 generations
     /// ```
-    pub fn advance(&mut self, gens: u32) {
+    pub fn advance(&mut self, gens: u64) {
         self.root = self.advance_aux(self.root, gens);
         self.epochs += gens;
-    }
-
-    /// Deletes a cell at the specified coordinates if it exists and is alive.
-    /// 
-    /// If the target coordinates are within the current universe bounds and the cell
-    /// is alive, it will be set to dead. If the coordinates are outside bounds or
-    /// the cell is already dead, no action is taken.
-    /// 
-    /// # Arguments
-    /// * `target` - The (x, y) coordinates of the cell to delete
-    pub fn delete(&mut self, target: WCoord) {
-        if in_limit(target, self.dim()) {
-            let path = self.get_path(target);
-
-            match path.first() {
-                Some((ALIVE, _)) => self.backprop(path, DEAD),
-                _ => {}
-            } 
-        }
     }
 
     /// Adds a cell at the specified coordinates, expanding the universe if necessary.
@@ -347,23 +330,26 @@ impl Universe {
     /// # Arguments
     /// * `target` - The (x, y) coordinates of the cell to add
     pub fn add(&mut self, target: WCoord) {
-        if in_limit(target, self.dim()) {
-            let path = self.get_path(target);
-
-            match path.first() {
-                Some((DEAD, _)) => self.backprop(path, ALIVE),
-                _ => {}
-            } 
-        } else {
-            let mut k = self.dim();
-            let bound = cmp::max(transform(target.0), transform(target.1));
-
-            while 2_i64.pow(k-1) <= bound {
-                self.root = self.centre(self.root);
-                k += 1;
+        if let Some(path) = self.search(target) {
+            if let Some((DEAD, _)) = path.first() {
+                self.backprop(path, ALIVE)
             }
+        }
+    }
 
-            self.add(target);
+    /// Deletes a cell at the specified coordinates if it exists and is alive.
+    /// 
+    /// If the target coordinates are within the current universe bounds and the cell
+    /// is alive, it will be set to dead. If the coordinates are outside bounds or
+    /// the cell is already dead, no action is taken.
+    /// 
+    /// # Arguments
+    /// * `target` - The (x, y) coordinates of the cell to delete
+    pub fn delete(&mut self, target: WCoord) {
+        if let Some(path) = self.search(target) {
+            if let Some((ALIVE, _)) = path.first() {
+                self.backprop(path, DEAD)
+            }
         }
     }
 
@@ -376,32 +362,16 @@ impl Universe {
     /// # Arguments
     /// * `target` - The (x, y) coordinates of the cell to toggle
     pub fn toggle(&mut self, target: WCoord) {
-        if in_limit(target, self.dim()) {
-            let path = self.get_path(target);
-
-            match path.first() {
-                Some((ALIVE, _)) => self.backprop(path, DEAD),
-                Some((DEAD, _)) => self.backprop(path, ALIVE),
-                _ => {}
-            } 
-        } else {
-            self.add(target)
+        if let Some(path) = self.search(target) {
+            if let Some((leaf, _)) = path.first() {
+                let target = *leaf ^ 1;
+                self.backprop(path, target);
+            }
         }
     }
 
-    /// Checks if a cell at the specified coordinates is alive.
-    /// 
-    /// Returns true if the coordinates are within bounds and the cell is alive,
-    /// false otherwise (including if coordinates are outside bounds).
-    /// 
-    /// # Arguments
-    /// * `target` - The (x, y) coordinates to check
-    /// 
-    /// # Returns
-    /// `true` if the cell is alive, `false` otherwise
     pub fn is_alive(&mut self, target: WCoord) -> bool {
-        if in_limit(target, self.dim()) {
-            let path = self.get_path(target);
+        if let Some(path) = self.search(target) {
             let (leaf, _) = path[0];
             leaf == ALIVE
         } else {
@@ -424,18 +394,23 @@ impl Universe {
     /// ```
     pub fn to_coords(&self) -> LinkedList<WCoord> {
         let mut points = list![];
-        self.to_coords_aux(self.root, (0, 0), &mut points, offset(self.dim()));
+        let span = offset(self.dim());
+        self.to_coords_aux(self.root, (0, 0), &mut points, span);
         points
     }
 
     // Private methods
+
+    fn dim(&self) -> u32 {
+        self.nodes[self.root].k
+    }
 
     fn from_coords_aux(
         &mut self,
         cells: &LinkedList<WCoord>,
         (c_x, c_y): WCoord,
         level: u32,
-        prev_offset: i64
+        offset: i64
     ) -> NodeId {
         if cells.is_empty() {
             self.zero(level)
@@ -470,12 +445,11 @@ impl Universe {
                 }
             }
 
-            let offset = prev_offset / 2;
-            let nw = self.from_coords_aux(&nw_cells, (c_x - offset, c_y + offset), level - 1, offset);
-            let ne = self.from_coords_aux(&ne_cells, (c_x + offset, c_y + offset), level - 1, offset);
-            let sw = self.from_coords_aux(&sw_cells, (c_x - offset, c_y - offset), level - 1, offset);
-            let se = self.from_coords_aux(&se_cells, (c_x + offset, c_y - offset), level - 1, offset);
-
+            let new_offset = offset / 2;
+            let nw = self.from_coords_aux(&nw_cells, (c_x - offset, c_y + offset), level - 1, new_offset);
+            let ne = self.from_coords_aux(&ne_cells, (c_x + offset, c_y + offset), level - 1, new_offset);
+            let sw = self.from_coords_aux(&sw_cells, (c_x - offset, c_y - offset), level - 1, new_offset);
+            let se = self.from_coords_aux(&se_cells, (c_x + offset, c_y - offset), level - 1, new_offset);
             self.join(nw, ne, sw, se)
         }
     }
@@ -532,7 +506,7 @@ impl Universe {
             outer += self.nodes[id].n as u8;
         }
 
-        if (self.nodes[e].n == 1 && self.s.contains(&(outer))) || self.b.contains(&(outer)) {
+        if (self.nodes[e].n == 1 && self.s.contains(&outer)) || self.b.contains(&outer) {
             ALIVE
         } else {
             DEAD
@@ -554,9 +528,9 @@ impl Universe {
         self.join(ad, bc, cb, da)
     }
 
-    fn advance_aux(&mut self, root: NodeId, mut gens: u32) -> NodeId {
+    fn advance_aux(&mut self, root: NodeId, mut gens: u64) -> NodeId {
         let mut nested = root;
-        let mut counter = 0;
+        let mut counter= 0;
 
         while gens > 0 {
             if (gens & 1) == 1 {
@@ -646,7 +620,7 @@ impl Universe {
     }
 
     fn backprop(&mut self, path: Path, target: NodeId) {
-        let (leaf, q) = path[0];
+        let (_, q) = path[0];
         let (parent, _) = path[1];
         let mut updated = self.set_child(parent, q, target);
 
@@ -670,35 +644,37 @@ impl Universe {
         }
     } 
 
-    fn get_path(&self, target: WCoord) -> Path {
-        let dim = self.dim();
-        let mut path = Vec::with_capacity((dim + 1) as usize);
-        self.get_path_aux(self.root, Quadrant::SW, target, (0, 0), offset(dim), &mut path);
-        path
+    fn search(&self, target: WCoord) -> Option<Path> {
+        if in_limit(target, self.dim()) {
+            let mut path = vec![];
+            self.search_aux(self.root, Quadrant::SW, target, (0, 0), &mut path, offset(self.dim()));
+            Some(path)
+        } else {
+            None
+        }
     }
 
-    fn get_path_aux(
+    fn search_aux(
         &self,
         current: NodeId,
         quadrant: Quadrant,
         target: WCoord,
         (c_x, c_y): WCoord,
-        prev_offset: i64,
-        path: &mut Path
+        path: &mut Path,
+        offset: i64
     ) {
         let c_node = &self.nodes[current];
         let level = c_node.k;
 
         if level > 0 {
-            // This ought to be optimized too
-            let offset = prev_offset / 2;
+            let new_offset = offset / 2;
             let (x, y) = target;
 
             match (x >= c_x, y >= c_y) {
-                (true, true)   => self.get_path_aux(c_node.b, Quadrant::NE, target, (c_x + offset, c_y + offset), offset, path),
-                (true, false)  => self.get_path_aux(c_node.d, Quadrant::SE, target, (c_x + offset, c_y - offset), offset, path),
-                (false, true)  => self.get_path_aux(c_node.a, Quadrant::NW, target, (c_x - offset, c_y + offset), offset, path),
-                (false, false) => self.get_path_aux(c_node.c, Quadrant::SW, target, (c_x - offset, c_y - offset), offset, path)
+                (true, true)   => self.search_aux(c_node.b, Quadrant::NE, target, (c_x + offset, c_y + offset), path, new_offset),
+                (true, false)  => self.search_aux(c_node.d, Quadrant::SE, target, (c_x + offset, c_y - offset), path, new_offset),
+                (false, true)  => self.search_aux(c_node.a, Quadrant::NW, target, (c_x - offset, c_y + offset), path, new_offset),
+                (false, false) => self.search_aux(c_node.c, Quadrant::SW, target, (c_x - offset, c_y - offset), path, new_offset)
             }
         }
 
@@ -710,7 +686,7 @@ impl Universe {
         root: NodeId,
         (c_x, c_y): WCoord,
         points: &mut LinkedList<WCoord>,
-        prev_offset: i64,
+        span: i64
     ) {
         let r_node= &self.nodes[root];
         let level = r_node.k;
@@ -733,12 +709,11 @@ impl Universe {
                     points.push_back((c_x, c_y - 1));
                 }
             } else {
-                // This ought to be optimized
-                let offset = prev_offset / 2;
-                self.to_coords_aux(r_node.a, (c_x - offset, c_y + offset), points, offset);
-                self.to_coords_aux(r_node.b, (c_x + offset, c_y + offset), points, offset);
-                self.to_coords_aux(r_node.c, (c_x - offset, c_y - offset), points, offset);
-                self.to_coords_aux(r_node.d, (c_x + offset, c_y - offset), points, offset);
+                let new_span = span / 2;
+                self.to_coords_aux(r_node.a, (c_x - span, c_y + span), points, new_span);
+                self.to_coords_aux(r_node.b, (c_x + span, c_y + span), points, new_span);
+                self.to_coords_aux(r_node.c, (c_x - span, c_y - span), points, new_span);
+                self.to_coords_aux(r_node.d, (c_x + span, c_y - span), points, new_span);
             }
         }
     }

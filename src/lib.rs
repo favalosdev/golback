@@ -34,3 +34,88 @@
 //! ```
 
 pub mod universe;
+
+#[cfg(test)]
+mod tests {
+    use std::collections::LinkedList;
+    use crate::universe::Universe;
+    const TEST_DIM: u32 = 3;
+
+    #[test]
+    fn new_initializes_zero_population_and_epoch() {
+        let universe = Universe::new();
+        assert_eq!(universe.population(), 0);
+        assert_eq!(universe.epochs(), 0);
+    }
+
+    #[test]
+    fn add_delete_toggle_and_is_alive_work() {
+        let mut u = Universe::new();
+        u.init(TEST_DIM);
+
+        u.add((0, 0));
+        assert!(u.is_alive((0, 0)));
+        assert_eq!(u.population(), 1);
+
+        u.delete((0, 0));
+        assert!(!u.is_alive((0, 0)));
+        assert_eq!(u.population(), 0);
+
+        u.toggle((1, 1));
+        assert!(u.is_alive((1, 1)));
+        assert_eq!(u.population(), 1);
+
+        u.toggle((1, 1));
+        assert!(!u.is_alive((1, 1)));
+        assert_eq!(u.population(), 0);
+    }
+
+    #[test]
+    fn from_coords_and_to_coords_roundtrip() {
+        let mut u = Universe::new();
+        u.init(TEST_DIM);
+
+        let mut cells = LinkedList::new();
+        cells.push_back((0, 0));
+        cells.push_back((1, 0));
+        cells.push_back((0, 1));
+        cells.push_back((1, 1));
+
+        u.from_coords(cells);
+        assert_eq!(u.population(), 4);
+
+        u.is_alive((0, 0));
+        u.is_alive((1, 0));
+        u.is_alive((0, 1));
+        u.is_alive((1, 1));
+
+        let coords = u.to_coords();
+        assert_eq!(coords.len(), 4);
+        assert!(coords.contains(&(0, 0)));
+        assert!(coords.contains(&(1, 0)));
+        assert!(coords.contains(&(0, 1)));
+        assert!(coords.contains(&(1, 1)));
+    }
+
+    #[test]
+    fn advance_performs_blinker_step() {
+        let mut u = Universe::new();
+        u.init(TEST_DIM);
+
+        let mut cells = LinkedList::new();
+        cells.push_back((-1, 0));
+        cells.push_back((0, 0));
+        cells.push_back((1, 0));
+
+        u.from_coords(cells);
+        assert_eq!(u.population(), 3);
+
+        u.advance(1);
+
+        assert_eq!(u.population(), 3);
+        assert!(!u.is_alive((-1, 0)));
+        assert!(u.is_alive((0, -1)));
+        assert!(u.is_alive((0, 0)));
+        assert!(u.is_alive((0, 1)));
+    }
+}
