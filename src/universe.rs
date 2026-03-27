@@ -378,6 +378,22 @@ impl Universe {
         }
     }
 
+    /// Returns whether the cell at the specified coordinates is currently alive.
+    ///
+    /// Returns `false` if the coordinates are outside the universe bounds.
+    ///
+    /// # Arguments
+    /// * `target` - The (x, y) coordinates of the cell to query
+    ///
+    /// # Examples
+    /// ```rust
+    /// # use golback::universe::Universe;
+    /// # let mut universe = Universe::new();
+    /// # universe.init(3);
+    /// universe.add((0, 0));
+    /// assert!(universe.is_alive((0, 0)));
+    /// assert!(!universe.is_alive((1, 1)));
+    /// ```
     pub fn is_alive(&mut self, target: WCoord) -> bool {
         if let Some(path) = self.search(target) {
             let (leaf, _) = path[0];
