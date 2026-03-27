@@ -102,7 +102,7 @@ impl Caches {
 /// 
 /// // Create a new universe with default B3/S23 rules
 /// let mut universe = Universe::new();
-/// universe.init();
+/// universe.init(3);
 /// 
 /// // Load a pattern from RLE file
 /// universe.load("glider.rle".to_string()).unwrap();
@@ -134,7 +134,7 @@ impl Universe {
     /// use golback::universe::Universe;
     /// 
     /// let mut universe = Universe::new();
-    /// universe.init(); // Creates empty grid
+    /// universe.init(3); Creates a 8x8, empty grid
     /// ```
     pub fn new() -> Self {
         let mut nodes = Vec::with_capacity(ARENA_SIZE);
@@ -161,10 +161,20 @@ impl Universe {
         }
     }
 
-    /// Initializes the universe with an empty grid.
+    /// Initializes the universe with an empty grid of the specified dimension.
+    /// 
+    /// # Arguments
+    /// * `dim` - The level of the quadtree. The universe will have a size of 2^dim x 2^dim cells.
     /// 
     /// Must be called before using the universe if you don't load a pattern first.
-    /// Creates a minimal empty universe that can be expanded as needed.
+    /// 
+    /// # Examples
+    /// ```rust
+    /// # use golback::universe::Universe;
+    /// # let mut universe = Universe::new();
+    /// universe.init(3); // Initializes universe as an empty 8x8 grid
+    /// ```
+    
     pub fn init(&mut self, dim: u32) {
         self.root = self.zero(dim.max(self.nodes[self.root].k));
     }
