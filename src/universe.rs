@@ -319,6 +319,14 @@ impl Universe {
         self.epochs += gens;
     }
 
+    /// Deletes a cell at the specified coordinates if it exists and is alive.
+    /// 
+    /// If the target coordinates are within the current universe bounds and the cell
+    /// is alive, it will be set to dead. If the coordinates are outside bounds or
+    /// the cell is already dead, no action is taken.
+    /// 
+    /// # Arguments
+    /// * `target` - The (x, y) coordinates of the cell to delete
     pub fn delete(&mut self, target: WCoord) {
         if in_limit(target, self.dim()) {
             let path = self.get_path(target);
@@ -330,6 +338,14 @@ impl Universe {
         }
     }
 
+    /// Adds a cell at the specified coordinates, expanding the universe if necessary.
+    /// 
+    /// If the target coordinates are within the current universe bounds and the cell
+    /// is dead, it will be set to alive. If the coordinates are outside bounds,
+    /// the universe will be expanded to accommodate the new cell.
+    /// 
+    /// # Arguments
+    /// * `target` - The (x, y) coordinates of the cell to add
     pub fn add(&mut self, target: WCoord) {
         if in_limit(target, self.dim()) {
             let path = self.get_path(target);
@@ -351,6 +367,14 @@ impl Universe {
         }
     }
 
+    /// Toggles the state of a cell at the specified coordinates.
+    /// 
+    /// If the target coordinates are within bounds, the cell state will be flipped
+    /// (alive becomes dead, dead becomes alive). If outside bounds, the cell will
+    /// be added as alive.
+    /// 
+    /// # Arguments
+    /// * `target` - The (x, y) coordinates of the cell to toggle
     pub fn toggle(&mut self, target: WCoord) {
         if in_limit(target, self.dim()) {
             let path = self.get_path(target);
@@ -365,6 +389,16 @@ impl Universe {
         }
     }
 
+    /// Checks if a cell at the specified coordinates is alive.
+    /// 
+    /// Returns true if the coordinates are within bounds and the cell is alive,
+    /// false otherwise (including if coordinates are outside bounds).
+    /// 
+    /// # Arguments
+    /// * `target` - The (x, y) coordinates to check
+    /// 
+    /// # Returns
+    /// `true` if the cell is alive, `false` otherwise
     pub fn is_alive(&mut self, target: WCoord) -> bool {
         if in_limit(target, self.dim()) {
             let path = self.get_path(target);
