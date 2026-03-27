@@ -132,10 +132,10 @@ impl Universe {
     /// 
     /// ```rust
     /// use golback::universe::Universe;
-    /// 
+    ///
     /// let mut universe = Universe::new();
-    /// universe.init(3); Creates a 8x8, empty grid
-    /// ```
+    /// universe.init(3); // Creates an 8x8 empty grid
+    /// ``` 
     pub fn new() -> Self {
         let mut nodes = Vec::with_capacity(ARENA_SIZE);
 
@@ -196,23 +196,24 @@ impl Universe {
     }
 
     /// An alive cell survives if it has exactly this many alive neighbors.
-    /// 
-    /// Default Conway's Game of Life uses S23 (survive with 2 or 3 neighbors
+    ///
+    /// Default Conway's Game of Life uses S23 (survive with 2 or 3 neighbors).
     /// Returns a cloned vector of survival rules (how many neighbors required for an alive cell to survive).
     pub fn s(&self) -> Vec<u8> {
         self.s.clone()
     }
-    /// 
+    /// Loads a pattern from an RLE file into the universe.
+    ///
     /// The RLE format can include custom birth/survival rules in the header.
     /// If custom rules are found, they will override the default B3/S23 rules.
     /// The pattern is centered at the origin (0, 0).
-    /// 
+    ///
     /// # Arguments
     /// * `input` - Path to the RLE file
-    /// 
+    ///
     /// # Errors
-    /// Returns an error if the file cannot be read or parsed as valid RLE format.
-    /// 
+    /// Returns an error if the file cannot be opened or parsed as valid RLE format.
+    ///
     /// # Examples
     /// ```rust
     /// # use golback::universe::Universe;
@@ -220,9 +221,6 @@ impl Universe {
     /// universe.load("patterns/glider.rle".to_string())?;
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
-    /// 
-    /// # Errors
-    /// Returns an error if the file cannot be opened or parsed as valid RLE format.
     pub fn load(&mut self, input: String) -> Result<(), Box<dyn std::error::Error>> {
         let file = File::open(&input)?;
         let pattern = Rle::new_from_file(file)?;
