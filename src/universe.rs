@@ -21,6 +21,10 @@ struct Node {
     d: NodeId
 }
 
+/// Unique identifier type for a node in the Game of Life universe.
+///
+/// Node IDs are unsigned integers used to index and reference cells efficiently
+/// within internal data structures. Each `NodeId` corresponds to a distinct cell or node.
 pub type NodeId = usize;
 
 #[derive(Debug, Clone, Copy)]
