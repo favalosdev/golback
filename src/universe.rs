@@ -365,6 +365,16 @@ impl Universe {
         }
     }
 
+    pub fn is_alive(&mut self, target: WCoord) -> bool {
+        if in_limit(target, self.dim()) {
+            let path = self.get_path(target);
+            let (leaf, _) = path[0];
+            leaf == ALIVE
+        } else {
+            false
+        }
+    }
+
     /// Returns a list of coordinates of all currently alive cells.
     /// 
     /// This can be used to export the current universe state or for visualization.
