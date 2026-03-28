@@ -170,7 +170,6 @@ impl Universe {
     /// # let mut universe = Universe::new();
     /// universe.init(3); // Initializes universe as an empty 8x8 grid
     /// ```
-    
     pub fn init(&mut self, dim: u32) {
         self.root = self.zero(dim.max(self.dim()));
     }
