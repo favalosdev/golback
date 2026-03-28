@@ -172,7 +172,7 @@ impl Universe {
     /// ```
     
     pub fn init(&mut self, dim: u32) {
-        self.root = self.zero(dim.max(self.nodes[self.root].k));
+        self.root = self.zero(dim.max(self.dim()));
     }
 
     /// Returns the total number of generations that have elapsed since universe creation.
