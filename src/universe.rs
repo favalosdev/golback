@@ -44,11 +44,7 @@ const ALIVE: NodeId = 1;
 const VOID: NodeId = 2;
 
 fn offset(k: u32) -> i64 {
-    if k > 1 {
-        2_i64.pow(k - 2)
-    } else {
-        1
-    }
+    if k > 1 { 2_i64.pow(k - 2) } else { 1 }
 }
 
 fn transform(x: i64) -> i64 {
