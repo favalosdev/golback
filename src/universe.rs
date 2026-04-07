@@ -40,7 +40,45 @@ type Path = Vec<(NodeId, Quadrant)>;
 pub type Coordinates = ca_formats::Coordinates;
 
 trait_aliases! {
+    /// A trait alias for any type that can be iterated over to produce owned cell coordinates.
+    ///
+    /// This is used as a return type bound (e.g., in [`Universe::to_coords`]) to allow
+    /// the universe to return any collection of [`Coordinates`] without committing to a
+    /// specific container type like `Vec`.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use golback::universe::Universe;
+    ///
+    /// let mut universe = Universe::new();
+    /// universe.load("glider.rle".to_string())?;
+    ///
+    /// // `to_coords` returns an impl CellContainer
+    /// for (x, y) in universe.to_coords() {
+    ///     println!("Alive cell at ({}, {})", x, y);
+    /// }
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
     pub trait CellContainer = IntoIterator<Item = Coordinates>;
+    
+    /// A trait alias for any type that can be iterated over to produce references to cell coordinates.
+    ///
+    /// This is the borrowed counterpart to [`CellContainer`], used as an input bound
+    /// (e.g., in [`Universe::from_coords`]) to accept any collection that yields `&Coordinates`
+    /// without requiring ownership of the underlying data.
+    ///
+    /// The lifetime `'a` ties the yielded references to the lifetime of the container itself.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use golback::universe::Universe;
+    ///
+    /// let mut universe = Universe::new();
+    /// let cells = vec![(0i64, 0i64), (1, 0), (0, 1)];
+    ///
+    /// // `from_coords` accepts any RefCellContainer — here, a &Vec
+    /// universe.from_coords(&cells);
+    /// ```
     pub trait RefCellContainer<'a> = IntoIterator<Item = &'a Coordinates>;
 }
 
