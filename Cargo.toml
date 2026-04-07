@@ -13,3 +13,4 @@ authors = ["Fernando Avalos"]
 ca-formats = "0.3.5"
 literal = "0.2.0"
 rustc-hash = "2.1.1"
+trait-aliases = "0.3.0"
