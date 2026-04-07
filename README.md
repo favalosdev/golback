@@ -19,7 +19,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-golback = "0.1"
+golback = "0.3.3"
 ```
 
 ## Quick Start

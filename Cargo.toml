@@ -1,6 +1,6 @@
 [package]
 name = "golback"
-version = "0.3.2"
+version = "0.3.3"
 edition = "2024"
 description = "A high-performance quadtree-based backend for Conway's Game of Life"
 license = "MIT"
