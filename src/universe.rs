@@ -611,7 +611,8 @@ impl Universe {
             // Base case. It doesn't need to be memoized
             self.life_4x4(m)
         } else {
-            let step = Some(j.map_or(level - 2, |j| cmp::min(j, level - 2)));
+            let limit = level - 2;
+            let step = Some(j.unwrap_or(limit).min(limit));
             
             let (ma, mb, mc, md) = (m_node.a, m_node.b, m_node.c, m_node.d);
             
