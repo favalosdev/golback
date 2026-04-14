@@ -1,9 +1,9 @@
 use std::collections::HashSet;
-use std::cmp;
 use std::fs::File;
 use rustc_hash::FxHashMap;
 use ca_formats::rle::Rle;
 use trait_aliases::trait_aliases;
+use ca_formats::rle::HeaderData;
 
 const ARENA_SIZE: usize = 1_000_000; // Reasonable estimate
 
@@ -263,10 +263,9 @@ impl Universe {
         let file = File::open(&input)?;
         let pattern = Rle::new_from_file(file)?;
 
-        let header_data = pattern.header_data().unwrap();
-        let width = header_data.x;
-        let height = header_data.y;
-        let rule = &header_data.rule;
+        let HeaderData { x, y, rule } = pattern.header_data().unwrap();
+        let height = *x as i64;
+        let width = *y as i64;
 
         rule.as_ref().map(|c| {
             let parts: Vec<&str> = c.split("/").collect();
@@ -277,7 +276,7 @@ impl Universe {
         let coords  =  pattern
             .map(|cell| cell.unwrap())
             .filter(|data | data.state == 1)
-            .map(|data| (data.position.0 - (width as i64) / 2, (height as i64) / 2 - data.position.1))
+            .map(|data| (data.position.0 - (width / 2), (height / 2) - data.position.1))
             .collect::<Vec<_>>();
 
         self.from_coords(&coords);
@@ -545,13 +544,12 @@ impl Universe {
     }
 
     fn centre(&mut self, m: NodeId) -> NodeId {
-        let m_node = &self.nodes[m];
-        let (ma, mb, mc, md) = (m_node.a, m_node.b, m_node.c, m_node.d);
-        let z = self.zero(m_node.k - 1);
-        let ja = self.join(z, z, z, ma);
-        let jb = self.join(z, z, mb, z);
-        let jc = self.join(z, mc, z, z);
-        let jd = self.join(md, z, z, z);
+        let Node { a, b, c, d, k, .. } = self.nodes[m]; 
+        let z = self.zero(k-1);
+        let ja = self.join(z, z, z, a);
+        let jb = self.join(z, z, b, z);
+        let jc = self.join(z, c, z, z);
+        let jd = self.join(d, z, z, z);
         self.join(ja, jb, jc, jd)
     }
 
@@ -566,11 +564,11 @@ impl Universe {
     }
 
     fn life_4x4(&mut self, m: NodeId) -> NodeId {
-        let m_node = &self.nodes[m];
-        let a = &self.nodes[m_node.a];
-        let b = &self.nodes[m_node.b];
-        let c = &self.nodes[m_node.c];
-        let d = &self.nodes[m_node.d];
+        let Node { a: ma, b: mb, c: mc, d: md, .. } = self.nodes[m];
+        let a = &self.nodes[ma];
+        let b = &self.nodes[mb];
+        let c = &self.nodes[mc];
+        let d = &self.nodes[md];
 
         let ad = self.life(a.a, a.b, b.a, a.c, a.d, b.c, c.a, c.b, d.a);
         let bc = self.life(a.b, b.a, b.b, a.d, b.c, b.d, c.b, d.a, d.b);
@@ -602,31 +600,21 @@ impl Universe {
             return *id;
         }
 
-        let m_node = &self.nodes[m];
-        let level = m_node.k;
+        let Node { a: ma, b: mb, c: mc, d: md, k, n  } = self.nodes[m];
 
-        let next = if m_node.n == 0 {
-            m_node.a
-        } else if level == 2 {
+        let next = if n == 0 {
+            ma
+        } else if k == 2 {
             // Base case. It doesn't need to be memoized
             self.life_4x4(m)
         } else {
-            let limit = level - 2;
+            let limit = k - 2;
             let step = Some(j.unwrap_or(limit).min(limit));
-            
-            let (ma, mb, mc, md) = (m_node.a, m_node.b, m_node.c, m_node.d);
-            
-            let a = &self.nodes[ma];
-            let (aa, ab, ac, ad) = (a.a, a.b, a.c, a.d);
-            
-            let b = &self.nodes[mb];
-            let (ba, bb, bc, bd) = (b.a, b.b, b.c, b.d);
-            
-            let c = &self.nodes[mc];
-            let (ca, cb, cc, cd) = (c.a, c.b, c.c, c.d);
-            
-            let d = &self.nodes[md];
-            let (da, db, dc, dd) = (d.a, d.b, d.c, d.d);
+
+            let Node { a: aa, b: ab, c: ac, d: ad, .. } = self.nodes[ma];
+            let Node { a: ba, b: bb, c: bc, d: bd, .. } = self.nodes[mb];
+            let Node { a: ca, b: cb, c: cc, d: cd, .. } = self.nodes[mc];
+            let Node { a: da, b: db, c: dc, d: dd, .. } = self.nodes[md];
             
             let j1 = self.join(aa, ab, ac, ad);
             let j2 = self.join(ab, ba, ad, bc);
@@ -648,7 +636,7 @@ impl Universe {
             let c8 = self.successor(j8, step);
             let c9 = self.successor(j9, step);
 
-            if step.unwrap() < level - 2 {
+            if step.unwrap() < k - 2 {
                 let s1 = self.join(self.nodes[c1].d, self.nodes[c2].c, self.nodes[c4].b, self.nodes[c5].a);
                 let s2 = self.join(self.nodes[c2].d, self.nodes[c3].c, self.nodes[c5].b, self.nodes[c6].a);
                 let s3 = self.join(self.nodes[c4].d, self.nodes[c5].c, self.nodes[c7].b, self.nodes[c8].a);
@@ -716,18 +704,17 @@ impl Universe {
         path: &mut Path,
         offset: i64
     ) {
-        let c_node = &self.nodes[current];
-        let level = c_node.k;
+        let Node { a, b, c, d, k , .. } = self.nodes[current];
 
-        if level > 0 {
+        if k > 0 {
             let new_offset = offset / 2;
             let (x, y) = target;
 
             match (x >= c_x, y >= c_y) {
-                (true, true)   => self.search_aux(c_node.b, Quadrant::B, target, (c_x + offset, c_y + offset), path, new_offset),
-                (true, false)  => self.search_aux(c_node.d, Quadrant::D, target, (c_x + offset, c_y - offset), path, new_offset),
-                (false, true)  => self.search_aux(c_node.a, Quadrant::A, target, (c_x - offset, c_y + offset), path, new_offset),
-                (false, false) => self.search_aux(c_node.c, Quadrant::C, target, (c_x - offset, c_y - offset), path, new_offset)
+                (true, true)   => self.search_aux(b, Quadrant::B, target, (c_x + offset, c_y + offset), path, new_offset),
+                (true, false)  => self.search_aux(d, Quadrant::D, target, (c_x + offset, c_y - offset), path, new_offset),
+                (false, true)  => self.search_aux(a, Quadrant::A, target, (c_x - offset, c_y + offset), path, new_offset),
+                (false, false) => self.search_aux(c, Quadrant::C, target, (c_x - offset, c_y - offset), path, new_offset)
             }
         }
 
@@ -741,32 +728,31 @@ impl Universe {
         points: &mut Vec<Coordinates>,
         span: i64
     ) {
-        let root_node= &self.nodes[root];
-        let level = root_node.k;
+        let Node { a, b, c, d, n, k } = self.nodes[root];
 
-        if root_node.n > 0 {
-            if level == 1 {
-                if root_node.a == ALIVE {
+        if n > 0 {
+            if k == 1 {
+                if a == ALIVE {
                     points.push((c_x - 1, c_y));
                 }
 
-                if root_node.b == ALIVE {
+                if b == ALIVE {
                     points.push((c_x, c_y));
                 }
 
-                if root_node.c == ALIVE {
+                if c == ALIVE {
                     points.push((c_x - 1, c_y - 1));
                 }
 
-                if root_node.d == ALIVE {
+                if d == ALIVE {
                     points.push((c_x, c_y - 1));
                 }
             } else {
                 let new_span = span / 2;
-                self.to_coords_aux(root_node.a, (c_x - span, c_y + span), points, new_span);
-                self.to_coords_aux(root_node.b, (c_x + span, c_y + span), points, new_span);
-                self.to_coords_aux(root_node.c, (c_x - span, c_y - span), points, new_span);
-                self.to_coords_aux(root_node.d, (c_x + span, c_y - span), points, new_span);
+                self.to_coords_aux(a, (c_x - span, c_y + span), points, new_span);
+                self.to_coords_aux(b, (c_x + span, c_y + span), points, new_span);
+                self.to_coords_aux(c, (c_x - span, c_y - span), points, new_span);
+                self.to_coords_aux(d, (c_x + span, c_y - span), points, new_span);
             }
         }
     }
