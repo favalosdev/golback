@@ -262,21 +262,24 @@ impl Universe {
     pub fn load(&mut self, input: String) -> Result<(), Box<dyn std::error::Error>> {
         let file = File::open(&input)?;
         let pattern = Rle::new_from_file(file)?;
+        let mut offset_x = 0_i64;
+        let mut offset_y = 0_i64;
 
-        let HeaderData { x, y, rule } = pattern.header_data().unwrap();
-        let height = *x as i64;
-        let width = *y as i64;
+        if let Some(&HeaderData { x, y, ref rule }) = pattern.header_data() {
+            if let Some(s) = rule.as_ref() {
+                let parts: Vec<&str> = s.split("/").collect();
+                self.b = parts[0][1..].chars().map(|c| c.to_digit(10).unwrap() as u8).collect();
+                self.s = parts[1][1..].chars().map(|c| c.to_digit(10).unwrap() as u8).collect();
+            };
 
-        rule.as_ref().map(|c| {
-            let parts: Vec<&str> = c.split("/").collect();
-            self.b = parts[0][1..].chars().map(|c| c.to_digit(10).unwrap() as u8).collect();
-            self.s = parts[1][1..].chars().map(|c| c.to_digit(10).unwrap() as u8).collect();
-        });
+            offset_x = (x as i64) / 2;
+            offset_y = (y as i64) / 2;
+        }
 
         let coords  =  pattern
             .map(|cell| cell.unwrap())
             .filter(|data | data.state == 1)
-            .map(|data| (data.position.0 - (width / 2), (height / 2) - data.position.1))
+            .map(|data| (data.position.0 - offset_x, offset_y - data.position.1))
             .collect::<Vec<_>>();
 
         self.from_coords(&coords);
@@ -516,8 +519,8 @@ impl Universe {
     }
 
     fn join(&mut self, a: NodeId, b: NodeId, c: NodeId, d: NodeId) -> NodeId {
-        if let Some(id) = self.caches.join.get(&(a, b, c, d)) {
-            return *id;
+        if let Some(&id) = self.caches.join.get(&(a, b, c, d)) {
+            return id;
         }
 
         let n = &self.nodes[a].n + &self.nodes[b].n + &self.nodes[c].n + &self.nodes[d].n;
@@ -528,8 +531,8 @@ impl Universe {
     }
 
     fn zero(&mut self, k: u32) -> NodeId {
-        if let Some(id) = self.caches.zero.get(&k) {
-            return *id;
+        if let Some(&id) = self.caches.zero.get(&k) {
+            return id;
         }
 
         let result = if k == 0 {
@@ -596,8 +599,8 @@ impl Universe {
     }
 
     fn successor(&mut self, m: NodeId, j: Option<u32>) -> NodeId {
-        if let Some(id) = self.caches.successor.get(&(m, j)) {
-            return *id;
+        if let Some(&id) = self.caches.successor.get(&(m, j)) {
+            return id;
         }
 
         let Node { a: ma, b: mb, c: mc, d: md, k, n  } = self.nodes[m];
