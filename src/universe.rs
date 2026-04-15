@@ -51,13 +51,12 @@ trait_aliases! {
     /// use golback::universe::Universe;
     ///
     /// let mut universe = Universe::new();
-    /// universe.load("glider.rle".to_string())?;
+    /// universe.load("patterns/glider.rle".to_string()).unwrap();
     ///
     /// // `to_coords` returns an impl CellContainer
     /// for (x, y) in universe.to_coords() {
     ///     println!("Alive cell at ({}, {})", x, y);
     /// }
-    /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     pub trait CellContainer = IntoIterator<Item = Coordinates>;
     
@@ -144,7 +143,7 @@ impl Caches {
 /// universe.init(3);
 /// 
 /// // Load a pattern from RLE file
-/// universe.load("glider.rle".to_string()).unwrap();
+/// universe.load("patterns/glider.rle".to_string()).unwrap();
 /// 
 /// // Advance 100 generations
 /// universe.advance(100);
@@ -306,7 +305,7 @@ impl Universe {
     /// cells.push_back((1, 0));
     /// cells.push_back((0, 1));
     /// 
-    /// universe.from_coords(cells); // Creates a block pattern
+    /// universe.from_coords(&cells); // Creates a block pattern
     /// ```
     pub fn from_coords<'a, T>(&mut self, cells: &'a T) where &'a T: RefCellContainer<'a> {
         let k = self.dim();
@@ -343,7 +342,7 @@ impl Universe {
     /// ```rust
     /// # use golback::universe::Universe;
     /// # let mut universe = Universe::new();
-    /// # universe.load("patterns/gosperglidergun.rle".to_string())?;
+    /// # universe.load("patterns/gosperglidergun.rle".to_string()).unwrap();
     /// universe.hash_life(); // Advance many generations at once
     /// ```
     pub fn hash_life(&mut self) {
@@ -364,7 +363,7 @@ impl Universe {
     /// ```rust
     /// # use golback::universe::Universe;
     /// # let mut universe = Universe::new();
-    /// # universe.load("patterns/gosperglidergun.rle".to_string())?;
+    /// # universe.load("patterns/gosperglidergun.rle".to_string()).unwrap();
     /// universe.advance(100); // Advance exactly 100 generations
     /// ```
     pub fn advance(&mut self, gens: u64) {
@@ -448,8 +447,8 @@ impl Universe {
     /// ```rust
     /// # use golback::universe::Universe;
     /// # let mut universe = Universe::new();
-    /// # universe.load("patterns/gosperglidergun.rle".to_string())?;
-    /// let alive_cells = universe.to_coords();
+    /// # universe.load("patterns/gosperglidergun.rle".to_string());
+    /// let alive_cells = universe.to_coords().into_iter().collect::<Vec<_>>();
     /// println!("Found {} alive cells", alive_cells.len());
     /// ```
     pub fn to_coords(&self) -> impl CellContainer {

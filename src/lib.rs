@@ -22,7 +22,7 @@
 //! let mut universe = Universe::new();
 //! universe.init(3);
 //!
-//! universe.load("glider.rle".to_string()).unwrap();
+//! universe.load("patterns/glider.rle".to_string()).unwrap();
 //! universe.advance(100);
 //!
 //! println!("Population: {}", universe.population());
